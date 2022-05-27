@@ -418,6 +418,7 @@ int main(int argc, char** argv) {
     // create a model using the API directly and serialize it to a stream
     char *trtModelStream{nullptr};
     size_t size{0};
+    std::string img_dir;
 
     if (argc == 2 && std::string(argv[1]) == "-s") {
         IHostMemory* modelStream{nullptr};
@@ -432,6 +433,7 @@ int main(int argc, char** argv) {
         modelStream->destroy();
         return 0;
     } else if (argc == 3 && std::string(argv[1]) == "-d") {
+	img_dir = std::string(argv[2]);
         std::ifstream file("yolov3.engine", std::ios::binary);
         if (file.good()) {
             file.seekg(0, file.end);
@@ -451,8 +453,8 @@ int main(int argc, char** argv) {
 
     std::vector<std::string> file_names;
     if (read_files_in_dir(argv[2], file_names) < 0) {
-        std::cout << "read_files_in_dir failed." << std::endl;
-        return -1;
+        //std::cout << "read_files_in_dir failed." << std::endl;
+        //return -1;
     }
 
     // prepare input data ---------------------------
@@ -467,6 +469,91 @@ int main(int argc, char** argv) {
     IExecutionContext* context = engine->createExecutionContext();
     assert(context != nullptr);
     delete[] trtModelStream;
+
+
+if (img_dir=="0"  || img_dir=="1" || img_dir=="2" || img_dir.find("avi" )!=std::string::npos){
+
+cv::VideoCapture capture;
+if (img_dir=="0"){
+    capture.open(0);
+}
+else if (img_dir=="1")
+{
+    capture.open(1,cv::CAP_V4L2);
+    capture.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
+}
+else if (img_dir=="2")
+{
+    std::cout << " open  video 2" << std::endl;
+    capture.open(2);
+}
+else
+{
+    capture.open(img_dir);
+}
+
+	
+	cv::Mat frame;
+	
+	if(!capture.isOpened())
+	{
+		std::cerr << "could not open  video" << std::endl;
+		return -1;
+	}
+	//capture.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
+	cv::namedWindow("out", cv::WINDOW_AUTOSIZE);
+
+	while (true)
+	{	auto start = std::chrono::system_clock::now();
+		
+
+
+			capture >> frame;
+
+
+
+		auto read_img = std::chrono::system_clock::now();
+		
+		std::cout<<"capture >> frame" << std::chrono::duration_cast<std::chrono::milliseconds>(read_img - start).count() << "ms" << "\n"<<std::endl;
+
+		if (frame.empty()) continue;
+		cv::Mat pr_img = preprocess_img(frame,INPUT_W, INPUT_H);
+		auto pre_img = std::chrono::system_clock::now();
+		std::cout<<"preprocess_img" << std::chrono::duration_cast<std::chrono::milliseconds>(pre_img - read_img).count() << "ms" << "\n"<<std::endl;
+		for (int i = 0; i < INPUT_H * INPUT_W; i++) {
+		    data[i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
+		    data[i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
+		    data[i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
+		}
+		auto pre = std::chrono::system_clock::now();
+		std::cout <<"prepare_data"<< std::chrono::duration_cast<std::chrono::milliseconds>(pre - pre_img).count() << "ms" << "\n "<<std::endl;
+
+// Run inference
+		//start = std::chrono::system_clock::now();
+		doInference(*context, data, prob, 1);
+		auto inf = std::chrono::system_clock::now();
+		std::cout<<"inference" << std::chrono::duration_cast<std::chrono::milliseconds>(inf - pre).count() << "ms"  <<"\n "<<std::endl;
+		std::vector<Yolo::Detection> res;
+
+	//frame=pr_img;	
+	    nms(res, prob);
+		for (size_t j = 0; j < res.size(); j++) {
+	        cv::Rect r = get_rect(frame, res[j].bbox);
+	        cv::rectangle(frame, r, cv::Scalar(0x27, 0xC1, 0x36), 2);
+	        cv::putText(frame, std::to_string((int)res[j].class_id), cv::Point(r.x, r.y - 1), cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(0xFF, 0xFF, 0xFF), 2);
+		}
+		
+		cv::imshow("out", frame);
+		cv::waitKey(1);
+		auto end = std::chrono::system_clock::now();
+		std::cout<<"show_img" << std::chrono::duration_cast<std::chrono::milliseconds>(end - inf).count() << "ms"  <<"\n ----------------"<<std::endl;
+	}
+	capture.release();
+}
+
+else{	
+
+
 
     int fcount = 0;
     for (auto f: file_names) {
@@ -495,6 +582,11 @@ int main(int argc, char** argv) {
         }
         cv::imwrite("_" + f, img);
     }
+
+}
+
+
+
 
     // Destroy the engine
     context->destroy();
