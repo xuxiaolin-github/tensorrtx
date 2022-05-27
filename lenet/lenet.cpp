@@ -5,6 +5,7 @@
 #include <map>
 #include <chrono>
 
+#define BATCH_SIZE 1
 #define CHECK(status) \
     do\
     {\
@@ -247,8 +248,8 @@ int main(int argc, char** argv)
 
 
     // Subtract mean from image
-    float data[INPUT_H * INPUT_W];
-    for (int i = 0; i < INPUT_H * INPUT_W; i++)
+    float data[BATCH_SIZE*INPUT_H * INPUT_W];
+    for (int i = 0; i < BATCH_SIZE*INPUT_H * INPUT_W; i++)
         data[i] = 1.0;
 
     IRuntime* runtime = createInferRuntime(gLogger);
@@ -259,13 +260,23 @@ int main(int argc, char** argv)
     assert(context != nullptr);
 
     // Run inference
-    float prob[OUTPUT_SIZE];
-    for (int i = 0; i < 1000; i++) {
+    float prob[BATCH_SIZE*OUTPUT_SIZE];
+
+    auto all_start = std::chrono::system_clock::now();
+    for (int i = 0; i < 40000; i++) {
         auto start = std::chrono::system_clock::now();
         doInference(*context, data, prob, 1);
         auto end = std::chrono::system_clock::now();
-        //std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+        // std::cout << "\nOutput:\n\n";
+        // for (unsigned int i = 0; i < 10; i++)
+        // {
+        //     std::cout << prob[i] << ", ";
+        // }
+        // std::cout << std::endl;
+        // std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
     }
+    auto all_end = std::chrono::system_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(all_end - all_start).count() << "ms" << std::endl;
 
     // Destroy the engine
     context->destroy();

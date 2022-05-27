@@ -23,6 +23,7 @@ static inline cv::Mat preprocess_img(cv::Mat& img, int input_w, int input_h) {
     cv::resize(img, re, re.size(), 0, 0, cv::INTER_LINEAR);
     cv::Mat out(input_h, input_w, CV_8UC3, cv::Scalar(128, 128, 128));
     re.copyTo(out(cv::Rect(x, y, re.cols, re.rows)));
+    
     return out;
 }
 

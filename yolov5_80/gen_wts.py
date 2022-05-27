@@ -4,8 +4,9 @@ from utils.torch_utils import select_device
 
 # Initialize
 device = select_device('cpu')
+pt_file = sys.argv[1]
 # Load model
-model = torch.load('weights/yolov5s.pt', map_location=device)['model'].float()  # load to FP32
+model = torch.load(pt_file, map_location=device)['model'].float()  # load to FP32
 model.to(device).eval()
 
 f = open('yolov5s.wts', 'w')

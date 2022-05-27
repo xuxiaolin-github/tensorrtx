@@ -17,11 +17,11 @@ include_directories(/usr/local/cuda/include)
 link_directories(/usr/local/cuda/lib64)
 # tensorrt
 include_directories(/usr/include/x86_64-linux-gnu/)
-link_directories(/home/xuxiaolin/Downloads/TensorRT-7.2.3.4/lib)
+#link_directories(/home/xuxiaolin/Downloads/TensorRT-7.2.3.4/lib)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Ofast -Wfatal-errors -D_MWAITXINTRIN_H_INCLUDED")
 
-cuda_add_library(myplugins SHARED ${PROJECT_SOURCE_DIR}/yololayer.cu)
+cuda_add_library(myplugins SHARED ${PROJECT_SOURCE_DIR}/yololayer.cu ${PROJECT_SOURCE_DIR}/mattoarray.cu)
 target_link_libraries(myplugins nvinfer cudart)
 
 find_package(OpenCV)

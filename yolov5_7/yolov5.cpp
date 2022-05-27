@@ -275,137 +275,120 @@ int main(int argc, char** argv) {
     CUDA_CHECK(cudaStreamCreate(&stream));
 
 	
-if (img_dir=="0"  || img_dir=="1" || img_dir=="2" || img_dir.find("avi" )!=std::string::npos){
-
-cv::VideoCapture capture;
-if (img_dir=="0"){
-    capture.open(0);
-}
-else if (img_dir=="1")
-{
-    capture.open(1,cv::CAP_V4L2);
-    capture.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
-}
-else if (img_dir=="2")
-{
-    std::cout << " open  video 2" << std::endl;
-    capture.open(2);
-}
-else
-{
-    capture.open(img_dir);
-}
-
+    cv::VideoCapture capture;
 	
-	cv::Mat frame;
-	
-	if(!capture.isOpened())
-	{
-		std::cerr << "could not open  video" << std::endl;
-		return -1;
-	}
-	//capture.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
-	cv::namedWindow("out", cv::WINDOW_AUTOSIZE);
+    cv::Mat frame1;
+    int i=1;
 
-	while (true)
-	{	auto start = std::chrono::system_clock::now();
-		
+    if (img_dir=="0"){
+        
+        capture.open(0);
+        // capture.open(0,cv::CAP_V4L2);
+        // capture.set(6, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+        
+        printf(CV_VERSION);
+        unsigned int f = (unsigned)capture.get(6);
+        char fourcc[] = {
+                (char)f, // First character is lowest bits
+                (char)(f >> 8), // Next character is bits 8-15
+                (char)(f >> 16), // Next character is bits 16-23
+                (char)(f >> 24), // Last character is bits 24-31
+                '\0' // and don't forget to terminate
+            };
 
-
-			capture >> frame;
-
-
-
-		auto read_img = std::chrono::system_clock::now();
-		
-		std::cout<<"capture >> frame" << std::chrono::duration_cast<std::chrono::milliseconds>(read_img - start).count() << "ms" << "\n"<<std::endl;
-
-		if (frame.empty()) continue;
-		cv::Mat pr_img = preprocess_img(frame,INPUT_W, INPUT_H);
-		auto pre_img = std::chrono::system_clock::now();
-		std::cout<<"preprocess_img" << std::chrono::duration_cast<std::chrono::milliseconds>(pre_img - read_img).count() << "ms" << "\n"<<std::endl;
-		for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-		    data[i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
-		    data[i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-		    data[i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-		}
-		auto pre = std::chrono::system_clock::now();
-		std::cout <<"prepare_data"<< std::chrono::duration_cast<std::chrono::milliseconds>(pre - pre_img).count() << "ms" << "\n "<<std::endl;
-
-
-		// Run inference
-		//start = std::chrono::system_clock::now();
-		doInference(*context, stream, buffers, data, prob, BATCH_SIZE);
-		auto inf = std::chrono::system_clock::now();
-		std::cout<<"inference" << std::chrono::duration_cast<std::chrono::milliseconds>(inf - pre).count() << "ms"  <<"\n "<<std::endl;
-		std::vector<Yolo::Detection> res;
-
-	//frame=pr_img;	
-	    nms(res, &prob[0], CONF_THRESH, NMS_THRESH);
-		for (size_t j = 0; j < res.size(); j++) {
-	        cv::Rect r = get_rect(frame, res[j].bbox);
-	        cv::rectangle(frame, r, cv::Scalar(0x27, 0xC1, 0x36), 2);
-	        cv::putText(frame, std::to_string((int)res[j].class_id), cv::Point(r.x, r.y - 1), cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(0xFF, 0xFF, 0xFF), 2);
-		}
-		
-		cv::imshow("out", frame);
-		cv::waitKey(1);
-		auto end = std::chrono::system_clock::now();
-		std::cout<<"show_img" << std::chrono::duration_cast<std::chrono::milliseconds>(end - inf).count() << "ms"  <<"\n ----------------"<<std::endl;
-	}
-	capture.release();
-}
-
-else{	
-
-
-
-
-	int fcount = 0;
-	for (int f = 0; f < (int)file_names.size(); f++) {
-	    fcount++;
-	    if (fcount < BATCH_SIZE && f + 1 != (int)file_names.size()) continue;
-	    for (int b = 0; b < fcount; b++) {
-	        cv::Mat img = cv::imread(img_dir + "/" + file_names[f - fcount + 1 + b]);
-	        if (img.empty()) continue;
-	        cv::Mat pr_img = preprocess_img(img, INPUT_W, INPUT_H); // letterbox BGR to RGB
-	        int i = 0;
-	        for (int row = 0; row < INPUT_H; ++row) {
-	            uchar* uc_pixel = pr_img.data + row * pr_img.step;
-	            for (int col = 0; col < INPUT_W; ++col) {
-	                data[b * 3 * INPUT_H * INPUT_W + i] = (float)uc_pixel[2] / 255.0;
-	                data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = (float)uc_pixel[1] / 255.0;
-	                data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = (float)uc_pixel[0] / 255.0;
-	                uc_pixel += 3;
-	                ++i;
-	            }
-	        }
-	    }
-
-	    // Run inference
-	    auto start = std::chrono::system_clock::now();
-	    doInference(*context, stream, buffers, data, prob, BATCH_SIZE);
-	    auto end = std::chrono::system_clock::now();
-	    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
-	    std::vector<std::vector<Yolo::Detection>> batch_res(fcount);
-	    for (int b = 0; b < fcount; b++) {
-	        auto& res = batch_res[b];
-	        nms(res, &prob[b * OUTPUT_SIZE], CONF_THRESH, NMS_THRESH);
-	    }
-	    for (int b = 0; b < fcount; b++) {
-	        auto& res = batch_res[b];
-	        //std::cout << res.size() << std::endl;
-	        cv::Mat img = cv::imread(img_dir + "/" + file_names[f - fcount + 1 + b]);
-	        for (size_t j = 0; j < res.size(); j++) {
-	            cv::Rect r = get_rect(img, res[j].bbox);
-	            cv::rectangle(img, r, cv::Scalar(0x27, 0xC1, 0x36), 2);
-	            cv::putText(img, std::to_string((int)res[j].class_id), cv::Point(r.x, r.y - 1), cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(0xFF, 0xFF, 0xFF), 2);
-	        }
-	        cv::imwrite("_" + file_names[f - fcount + 1 + b], img);
-	    }
-	    fcount = 0;
-	}
+        std::cout<< capture.get(3)  << capture.get(4)<<capture.get(5)<<fourcc<<std::endl;
     }
+    else if (img_dir=="1")
+    {
+        capture.open(1);
+    }
+    else if (img_dir=="2")
+    {
+    std::cout << " open  video 2" << std::endl;
+        capture.open(2);
+    }
+    else
+    {
+    capture.open(img_dir);
+    }
+
+    if(!capture.isOpened())
+    {
+        std::cerr << "could not open  video" << std::endl;
+        return -1;
+    }
+
+    cv::VideoWriter  output_stream;
+    int fps = 30;
+	int fourcc = cv::VideoWriter::fourcc('H', '2', '6', '4');
+	cv::Size frame_size(capture.get(3),capture.get(4));
+    output_stream.open("7-1280.mp4", fourcc, fps, frame_size, true);
+
+	
+    cv::Mat frame;
+
+    cv::namedWindow("out", cv::WINDOW_AUTOSIZE);
+
+    int num=0;
+    while (num++<2000)
+    {	auto start = std::chrono::system_clock::now();
+        
+
+
+        capture >> frame;
+        if (frame.empty())
+            
+                // rate=capture.get(cv::CAP_PROP_FPS);
+                // capture.set(cv::CAP_PROP_POS_FRAMES, 0);
+                // capture>>frame;
+                // i=0;
+                break;
+            
+
+
+
+        auto read_img = std::chrono::system_clock::now();
+        
+        std::cout<<"capture >> frame" << std::chrono::duration_cast<std::chrono::milliseconds>(read_img - start).count() << "ms" << "\n"<<std::endl;
+
+        if (frame.empty()) continue;
+        cv::Mat pr_img = preprocess_img(frame,INPUT_W, INPUT_H);
+        auto pre_img = std::chrono::system_clock::now();
+        std::cout<<"preprocess_img" << std::chrono::duration_cast<std::chrono::milliseconds>(pre_img - read_img).count() << "ms" << "\n"<<std::endl;
+        for (int i = 0; i < INPUT_H * INPUT_W; i++) {
+            data[i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
+            data[i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
+            data[i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
+        }
+        auto pre = std::chrono::system_clock::now();
+        std::cout <<"prepare_data"<< std::chrono::duration_cast<std::chrono::milliseconds>(pre - pre_img).count() << "ms" << "\n "<<std::endl;
+
+
+        // Run inference
+        //start = std::chrono::system_clock::now();
+        doInference(*context, stream, buffers, data, prob, BATCH_SIZE);
+        auto inf = std::chrono::system_clock::now();
+        std::cout<<"inference" << std::chrono::duration_cast<std::chrono::milliseconds>(inf - pre).count() << "ms"  <<"\n "<<std::endl;
+        std::vector<Yolo::Detection> res;
+
+        //frame=pr_img;	
+        nms(res, &prob[0], CONF_THRESH, NMS_THRESH);
+        for (size_t j = 0; j < res.size(); j++) {
+            cv::Rect r = get_rect(frame, res[j].bbox);
+            cv::rectangle(frame, r, cv::Scalar(0x27, 0xC1, 0x36), 2);
+            cv::putText(frame, std::to_string((int)res[j].class_id), cv::Point(r.x, r.y - 1), cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(0xFF, 0xFF, 0xFF), 2);
+        }
+        
+        output_stream.write(frame);
+        cv::imshow("out", frame);
+        cv::waitKey(1);
+        auto end = std::chrono::system_clock::now();
+        std::cout<<"show_img" << std::chrono::duration_cast<std::chrono::milliseconds>(end - inf).count() << "ms"  <<"\n ----------------"<<std::endl;
+    }
+    capture.release();
+    output_stream.release();
+
+
     // Release stream and buffers
     cudaStreamDestroy(stream);
     CUDA_CHECK(cudaFree(buffers[inputIndex]));

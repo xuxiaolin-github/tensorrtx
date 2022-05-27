@@ -8,7 +8,9 @@
 #include <opencv2/opencv.hpp>
 #include "NvInfer.h"
 #include "yololayer.h"
+#include<string>
 
+#define BATCH_SIZE 1
 using namespace nvinfer1;
 
 cv::Rect get_rect(cv::Mat& img, float bbox[4]) {
@@ -181,7 +183,39 @@ ILayer* focus(INetworkDefinition *network, std::map<std::string, Weights>& weigh
     ISliceLayer *s4 = network->addSlice(input, Dims3{ 0, 1, 1 }, Dims3{ inch, Yolo::INPUT_H / 2, Yolo::INPUT_W / 2 }, Dims3{ 1, 2, 2 });
     ITensor* inputTensors[] = { s1->getOutput(0), s2->getOutput(0), s3->getOutput(0), s4->getOutput(0) };
     auto cat = network->addConcatenation(inputTensors, 4);
+    auto conv = convBlock(network, weightMap, *cat-> getOutput(0), outch, ksize, 1, 1, lname + ".conv");
+
+    // printf("%s",cat->getOutput(0));
+    for (int i = 0; i <8; i++)
+    {
+         std::cout << cat->getOutput(0)->getDimensions().d[i]<< std::endl;
+    }
+    
+   
+   
+    return conv;
+}
+
+ILayer* focus_batch(INetworkDefinition *network, std::map<std::string, Weights>& weightMap, ITensor& input, int inch, int outch, int ksize, std::string lname) {
+    
+    ITensor* InputTensors[4*BATCH_SIZE];
+    for(auto i=0;i < BATCH_SIZE;i++){
+
+        ISliceLayer *s1 = network->addSlice(input, Dims4{i, 0, 0, 0 }, Dims4{1, inch, Yolo::INPUT_H / 2, Yolo::INPUT_W / 2 }, Dims4{i, 1, 2, 2 });
+        ISliceLayer *s2 = network->addSlice(input, Dims4{i, 0, 1, 0 }, Dims4{1,inch, Yolo::INPUT_H / 2, Yolo::INPUT_W / 2 }, Dims4{i, 1, 2, 2 });
+        ISliceLayer *s3 = network->addSlice(input, Dims4{i, 0, 0, 1 }, Dims4{1,inch, Yolo::INPUT_H / 2, Yolo::INPUT_W / 2 }, Dims4{i, 1, 2, 2 });
+        ISliceLayer *s4 = network->addSlice(input, Dims4{i,0, 1, 1 }, Dims4{1, inch, Yolo::INPUT_H / 2, Yolo::INPUT_W / 2 }, Dims4{i, 1, 2, 2 });
+        ITensor* inputTensors[] = { s1->getOutput(0), s2->getOutput(0), s3->getOutput(0), s4->getOutput(0) };
+        // InputTensors[]
+        for(auto j=0;j < 4;j++){
+            InputTensors[j+4*i]=inputTensors[j];
+
+        }
+    }
+    
+    auto cat = network->addConcatenation(InputTensors, 4*BATCH_SIZE);
     auto conv = convBlock(network, weightMap, *cat->getOutput(0), outch, ksize, 1, 1, lname + ".conv");
+    
     return conv;
 }
 
@@ -227,11 +261,13 @@ ILayer* C3(INetworkDefinition *network, std::map<std::string, Weights>& weightMa
         auto b = bottleneck(network, weightMap, *y1, c_, c_, shortcut, g, 1.0, lname + ".m." + std::to_string(i));
         y1 = b->getOutput(0);
     }
-
+//  std::cout << "1!" << std::endl;
     ITensor* inputTensors[] = { y1, cv2->getOutput(0) };
+    // std::cout << "1!" << std::endl;
     auto cat = network->addConcatenation(inputTensors, 2);
-
+// std::cout << "1!" << std::endl;
     auto cv3 = convBlock(network, weightMap, *cat->getOutput(0), c2, 1, 1, 1, lname + ".cv3");
+    
     return cv3;
 }
 

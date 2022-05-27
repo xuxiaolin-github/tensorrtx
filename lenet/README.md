@@ -1,4 +1,4 @@
-# lenet5
+.# lenet5
 
 lenet5 is the simplest net in this tensorrtx project. You can learn the basic procedures of building tensorrt app from API. Including `define network`, `build engine`, `set output`, `do inference`, `serialize model to file`, `deserialize model from file`, etc.
 
